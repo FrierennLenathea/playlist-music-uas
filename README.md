@@ -1,129 +1,16 @@
-Tugas uas project playlist music :))
+# React + Vite
 
-🎵 Music Playlist App
-Aplikasi web untuk mengelola playlist musik pribadi dengan fitur lengkap:
-✅ Login
-✅ Cari lagu
-✅ Putar lagu dengan simpan progress
-✅ Buat & kelola playlist
-✅ Drag & drop untuk atur urutan lagu
-✅ Hapus lagu/playlist
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
-Dibangun dengan frontend-only (React + Vite via CDN) + backend Express.js sederhana.
-Tidak perlu npm di frontend! Cukup buka file HTML di browser.
+Currently, two official plugins are available:
 
-📁 Struktur Project
-123456
-music-playlist/
-├── backend/              # Server Express.js (Node.js)
-│   └── server.js
-├── frontend/             # Frontend (1 file HTML)
-│   └── index.html
-└── README.md             # Kamu di sini!
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
 
-🚀 Cara Menjalankan
-1. Jalankan Backend (Express.js)
-Pastikan kamu sudah menginstall Node.js (LTS).
+## React Compiler
 
-bash
-123456789
-# Masuk ke folder backend
-cd backend
+The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
 
-# Install dependensi (sekali saja)
-npm init -y
-npm install express cors
+## Expanding the ESLint configuration
 
-# Jalankan server
-node server.js
-✅ Server akan jalan di: http://localhost:5000
-✅ Data dummy tersedia:
-
-Email: user@gmail.com
-Password: 123456
-2. Jalankan Frontend
-Tidak perlu install apa-apa!
-Cukup buka file HTML di browser.
-
-Buka file: frontend/index.html
-Klik 2x atau buka via VS Code → Live Server
-Login dengan akun di atas
-Nikmati aplikasi!
-
-✨ Fitur
-Fitur
-Deskripsi
-
-🔐 Login
-Autentikasi sederhana (data dummy)
-
-🔍 Cari Lagu
-Cari berdasarkan judul atau artis
-
-▶️ Putar Lagu
-Audio player bawaan browser
-
-💾 Simpan Progress
-Otomatis lanjut dari posisi terakhir (disimpan di localStorage)
-
-➕ Buat Playlist
-Tambah playlist baru via tombol
-
-🖱️ Drag & Drop
-Atur ulang urutan lagu di playlist dengan seret-seret
-
-❌ Hapus
-Hapus lagu dari playlist atau hapus seluruh playlist
-
-🛠️ Teknologi
-Frontend:
-React (via CDN)
-Tailwind CSS (via CDN)
-Babel Standalone (untuk JSX)
-localStorage untuk simpan progress & token
-Backend:
-Node.js + Express.js
-CORS enabled
-Data sementara (array JavaScript) — bisa dikembangkan ke MySQL
-
-🔒 API Endpoints (Backend)
-Method
-Endpoint
-Fungsi
-POST
-/api/auth/login
-Login
-GET
-/api/songs
-Ambil semua lagu
-GET
-/api/playlists
-Ambil playlist user
-POST
-/api/playlists
-Buat playlist baru
-POST
-/api/playlists/:id/songs
-Tambah lagu ke playlist
-DELETE
-/api/playlists/:id
-Hapus playlist
-DELETE
-/api/playlists/:id/songs/:songId
-Hapus lagu dari playlist
-PUT
-/api/playlists/:id/order
-Update urutan lagu (drag & drop)
-
-💡 Catatan Pengembangan
-Data disimpan di memori → restart server = data hilang
-(Untuk produksi, ganti ke database seperti MySQL/PostgreSQL)
-Progress lagu disimpan di localStorage → hanya berlaku per device & browser
-Tidak ada validasi kompleks → untuk demo & pembelajaran
-CORS sudah diaktifkan → frontend bisa akses dari file:// atau http://localhost
-
-🙌 Dibuat Untuk
-Developer yang ingin frontend tanpa ribet npm
-Demo aplikasi music sederhana
-Belajar integrasi React + Express.js
-Prototipe cepat dengan fitur drag & drop + audio
+If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.

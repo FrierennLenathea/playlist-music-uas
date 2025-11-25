@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Music Playlist - Full App</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style> body { margin: 0; background: #f9fafb; } </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const API_URL = 'http://localhost:5000/api';
+
+    // =============== API ===============
+    const login = async (credentials) => {
+      const res = await fetch(`${API_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(credentials),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Login gagal');
+      }
+      return res.json();
+    };
+
+    const fetchProtected = async (endpoint) => {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_URL}${endpoint}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Gagal ambil data');
+      return res.json();
+    };
+
+    const createPlaylist = async (name) => {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_URL}/playlists`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ name })
+      });
+      if (!res.ok) throw new Error('Gagal buat playlist');
+      return res.json();
+    };
+
+    const addSongToPlaylist = async (playlistId, songId) => {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_URL}/playlists/${playlistId}/songs`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ songId })
+      });
+      if (!res.ok) throw new Error('Gagal tambah lagu');
+      return res.json();
+    };
+
+    const deletePlaylist = async (playlistId) => {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_URL}/playlists/${playlistId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Gagal hapus playlist');
+    };
+
+    const removeSongFromPlaylist = async (playlistId, songId) => {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_URL}/playlists/${playlistId}/songs/${songId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Gagal hapus lagu');
+    };
+
+    const updatePlaylistOrder = async (playlistId, songIds) => {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_URL}/playlists/${playlistId}/order`, {
+        method: 'PUT',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ songIds })
+      });
+      if (!res.ok) throw new Error('Gagal update urutan');
+      return res.json();
+    };
+
+    // =============== DRAG & DROP HELPER ===============
+    const reorder = (list, startIndex, endIndex) => {
+      const result = Array.from(list);
+      const [removed] = result.splice(startIndex, 1);
+      result.splice(endIndex, 0, removed);
+      return result;
+    };
+
+    // =============== AUDIO PLAYER DENGAN PROGRESS ===============
+    function AudioPlayer({ currentSong, onPlay }) {
+      const [audioRef, setAudioRef] = React.useState(null);
+      const [savedTime, setSavedTime] = React.useState(0);
+
+      React.useEffect(() => {
+        if (!currentSong) {
+          setSavedTime(0);
+          return;
+        }
+        const key = `progress_${currentSong.id}`;
+        const saved = localStorage.getItem(key);
+        setSavedTime(saved ? parseFloat(saved) : 0);
+      }, [currentSong]);
+
+      const handleLoaded = () => {
+        if (audioRef && savedTime > 0) {
+          audioRef.currentTime = savedTime;
+        }
+      };
+
+      React.useEffect(() => {
+        if (!audioRef || !currentSong) return;
+
+        const key = `progress_${currentSong.id}`;
+        let interval;
+
+        const saveProgress = () => {
+          if (!audioRef.paused && !isNaN(audioRef.currentTime)) {
+            localStorage.setItem(key, audioRef.currentTime.toString());
+          }
+        };
+
+        interval = setInterval(saveProgress, 5000);
+        const onPause = () => saveProgress();
+        audioRef.addEventListener('pause', onPause);
+        const onBeforeUnload = () => { if (!audioRef.paused) saveProgress(); };
+        window.addEventListener('beforeunload', onBeforeUnload);
+
+        return () => {
+          clearInterval(interval);
+          audioRef.removeEventListener('pause', onPause);
+          window.removeEventListener('beforeunload', onBeforeUnload);
+        };
+      }, [audioRef, currentSong]);
+
+      if (!currentSong) return null;
+
+      return (
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-3 shadow-lg">
+          <div className="flex items-center justify-between max-w-4xl mx-auto">
+            <div>
+              <p className="font-semibold">{currentSong.title}</p>
+              <p className="text-sm text-gray-600">{currentSong.artist}</p>
+            </div>
+            <audio
+              ref={setAudioRef}
+              controls
+              src={currentSong.preview || "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"}
+              className="w-64"
+              onLoadedData={handleLoaded}
+              onEnded={() => onPlay(null)}
+            />
+          </div>
+        </div>
+      );
+    }
+
+    // =============== NAVBAR ===============
+    function Navbar({ onLogout, onNewPlaylist }) {
+      return (
+        <nav className="bg-indigo-700 text-white p-4 shadow-md">
+          <div className="container mx-auto flex justify-between items-center">
+            <h1 className="text-xl font-bold">🎵 Music Playlist</h1>
+            <div className="flex gap-3">
+              <button
+                onClick={onNewPlaylist}
+                className="bg-green-500 hover:bg-green-600 px-3 py-1 rounded text-sm"
+              >
+                + Playlist
+              </button>
+              <button
+                onClick={onLogout}
+                className="bg-red-500 hover:bg-red-600 px-3 py-1 rounded text-sm"
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+        </nav>
+      );
+    }
+
+    // =============== MODAL BUAT PLAYLIST ===============
+    function NewPlaylistModal({ isOpen, onClose, onCreate }) {
+      const [name, setName] = React.useState('');
+      const [loading, setLoading] = React.useState(false);
+      const handleSubmit = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        try {
+          await onCreate(name);
+          setName('');
+          onClose();
+        } catch (err) {
+          alert(err.message);
+        } finally {
+          setLoading(false);
+        }
+      };
+      if (!isOpen) return null;
+      return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg w-full max-w-sm">
+            <h3 className="text-lg font-bold mb-4">Buat Playlist Baru</h3>
+            <form onSubmit={handleSubmit}>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Nama playlist"
+                className="w-full p-2 border rounded mb-4"
+                required
+              />
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={onClose} className="px-3 py-1 border rounded">Batal</button>
+                <button type="submit" disabled={loading} className="px-3 py-1 bg-indigo-600 text-white rounded">
+                  {loading ? 'Simpan...' : 'Simpan'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      );
+    }
+
+    // =============== DRAGGABLE SONG ITEM ===============
+    function DraggableSongItem({ song, index, onRemove, provided, snapshot }) {
+      return (
+        <div
+          ref={provided.innerRef}
+          {...provided.draggableProps}
+          {...provided.dragHandleProps}
+          className={`p-3 mb-2 bg-white rounded shadow flex justify-between items-center ${
+            snapshot.isDragging ? 'bg-indigo-50' : ''
+          }`}
+        >
+          <div className="flex items-center">
+            <span className="mr-3 text-gray-500 cursor-move">☰</span>
+            <span>{song.title}</span>
+          </div>
+          <button
+            onClick={() => onRemove(song.id)}
+            className="text-red-500 hover:text-red-700"
+            title="Hapus dari playlist"
+          >
+            ❌
+          </button>
+        </div>
+      );
+    }
+
+    // =============== PLAYLIST CARD DENGAN DRAG & DROP ===============
+    function PlaylistCard({ playlist, songs, onDelete, onRemoveSong, onReorder }) {
+      const [showSongs, setShowSongs] = React.useState(false);
+      const [dragging, setDragging] = React.useState(false);
+      const playlistSongs = songs.filter(s => playlist.songs.includes(s.id));
+
+      // Urutkan sesuai playlist.songs
+      const orderedSongs = playlist.songs.map(id => songs.find(s => s.id == id)).filter(Boolean);
+
+      const onDragEnd = (result) => {
+        if (!result.destination) return;
+        const newOrder = reorder(
+          orderedSongs,
+          result.source.index,
+          result.destination.index
+        );
+        const newSongIds = newOrder.map(s => s.id);
+        onReorder(playlist.id, newSongIds);
+      };
+
+      return (
+        <div className="bg-white p-4 rounded-xl shadow">
+          <div className="flex justify-between items-center">
+            <h3 className="font-bold text-lg text-indigo-700">{playlist.name}</h3>
+            <button
+              onClick={() => onDelete(playlist.id)}
+              className="text-red-500 hover:text-red-700"
+              title="Hapus playlist"
+            >
+              🗑️
+            </button>
+          </div>
+          <p className="text-sm text-gray-600 mt-1">{playlist.songs.length} lagu</p>
+          <button
+            onClick={() => setShowSongs(!showSongs)}
+            className="mt-2 text-sm text-indigo-600"
+          >
+            {showSongs ? 'Sembunyikan' : 'Atur urutan lagu'}
+          </button>
+          {showSongs && (
+            <div className="mt-3">
+              {orderedSongs.length === 0 ? (
+                <p className="text-gray-500">Tidak ada lagu.</p>
+              ) : (
+                <div>
+                  <p className="text-xs text-gray-500 mb-2">Seret lagu untuk atur ulang:</p>
+                  <div className="space-y-2">
+                    {orderedSongs.map((song, index) => (
+                      <div
+                        key={song.id}
+                        className="p-3 bg-gray-50 rounded flex justify-between items-center"
+                      >
+                        <span>• {song.title}</span>
+                        <button
+                          onClick={() => onRemoveSong(playlist.id, song.id)}
+                          className="text-red-500 hover:text-red-700 ml-2"
+                        >
+                          ❌
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // =============== SONG CARD ===============
+    function SongCard({ song, onPlay, playlists, onAddToPlaylist }) {
+      const [showPlaylistMenu, setShowPlaylistMenu] = React.useState(false);
+      return (
+        <div className="bg-white p-4 rounded-xl shadow hover:shadow-md transition">
+          <div className="flex justify-between items-start">
+            <div>
+              <h3 className="font-bold text-lg">{song.title}</h3>
+              <p className="text-gray-600">{song.artist}</p>
+            </div>
+            <button onClick={() => onPlay(song)} className="text-indigo-600 hover:text-indigo-800">
+              ▶️
+            </button>
+          </div>
+          <button
+            onClick={() => setShowPlaylistMenu(!showPlaylistMenu)}
+            className="mt-3 text-sm text-gray-500 hover:text-gray-700"
+          >
+            + Tambah ke Playlist
+          </button>
+          {showPlaylistMenu && (
+            <div className="mt-2 space-y-1">
+              {playlists.map(pl => (
+                <button
+                  key={pl.id}
+                  onClick={() => onAddToPlaylist(pl.id, song.id)}
+                  className="block w-full text-left p-2 text-sm bg-gray-100 hover:bg-gray-200 rounded"
+                >
+                  {pl.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // =============== MAIN PAGE ===============
+    function MainPage({ onLogout }) {
+      const [activeTab, setActiveTab] = React.useState('songs');
+      const [songs, setSongs] = React.useState([]);
+      const [playlists, setPlaylists] = React.useState([]);
+      const [currentSong, setCurrentSong] = React.useState(null);
+      const [search, setSearch] = React.useState('');
+      const [showNewPlaylist, setShowNewPlaylist] = React.useState(false);
+      const [loading, setLoading] = React.useState(true);
+
+      React.useEffect(() => {
+        const loadData = async () => {
+          try {
+            const [songData, playlistData] = await Promise.all([
+              fetchProtected('/songs'),
+              fetchProtected('/playlists')
+            ]);
+            setSongs(songData);
+            setPlaylists(playlistData);
+          } catch (err) {
+            alert('Gagal ambil  ' + err.message);
+            onLogout();
+          } finally {
+            setLoading(false);
+          }
+        };
+        loadData();
+      }, [onLogout]);
+
+      const handleCreatePlaylist = async (name) => {
+        const newPl = await createPlaylist(name);
+        setPlaylists([...playlists, newPl]);
+      };
+
+      const handleAddToPlaylist = async (playlistId, songId) => {
+        try {
+          await addSongToPlaylist(playlistId, songId);
+          const updatedPlaylists = await fetchProtected('/playlists');
+          setPlaylists(updatedPlaylists);
+          alert('Lagu ditambahkan!');
+        } catch (err) {
+          alert('Gagal: ' + err.message);
+        }
+      };
+
+      const handleDeletePlaylist = async (playlistId) => {
+        if (!confirm('Hapus playlist ini?')) return;
+        try {
+          await deletePlaylist(playlistId);
+          setPlaylists(playlists.filter(p => p.id !== playlistId));
+        } catch (err) {
+          alert('Gagal hapus: ' + err.message);
+        }
+      };
+
+      const handleRemoveSong = async (playlistId, songId) => {
+        try {
+          await removeSongFromPlaylist(playlistId, songId);
+          const updatedPlaylists = await fetchProtected('/playlists');
+          setPlaylists(updatedPlaylists);
+        } catch (err) {
+          alert('Gagal hapus lagu: ' + err.message);
+        }
+      };
+
+      const handleReorder = async (playlistId, songIds) => {
+        try {
+          await updatePlaylistOrder(playlistId, songIds);
+          const updatedPlaylists = await fetchProtected('/playlists');
+          setPlaylists(updatedPlaylists);
+        } catch (err) {
+          alert('Gagal update urutan: ' + err.message);
+        }
+      };
+
+      const filteredSongs = songs.filter(song =>
+        song.title.toLowerCase().includes(search.toLowerCase()) ||
+        song.artist.toLowerCase().includes(search.toLowerCase())
+      );
+
+      return (
+        <div>
+          <Navbar 
+            onLogout={onLogout} 
+            onNewPlaylist={() => setShowNewPlaylist(true)} 
+          />
+          <div className="container mx-auto p-4 pt-20 pb-24">
+            <div className="flex mb-6 border-b">
+              <button
+                onClick={() => setActiveTab('songs')}
+                className={`pb-2 px-4 font-medium ${
+                  activeTab === 'songs' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-500'
+                }`}
+              >
+                Lagu
+              </button>
+              <button
+                onClick={() => setActiveTab('playlists')}
+                className={`pb-2 px-4 font-medium ${
+                  activeTab === 'playlists' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-500'
+                }`}
+              >
+                Playlist Saya
+              </button>
+            </div>
+
+            {activeTab === 'songs' && (
+              <>
+                <div className="mb-6">
+                  <input
+                    type="text"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Cari lagu atau artis..."
+                    className="w-full p-3 border rounded-lg shadow-sm"
+                  />
+                </div>
+                {loading ? (
+                  <p className="text-center">Loading...</p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredSongs.map(song => (
+                      <SongCard
+                        key={song.id}
+                        song={song}
+                        onPlay={setCurrentSong}
+                        playlists={playlists}
+                        onAddToPlaylist={handleAddToPlaylist}
+                      />
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
+            {activeTab === 'playlists' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {playlists.length === 0 ? (
+                  <p className="text-gray-500">Belum ada playlist.</p>
+                ) : (
+                  playlists.map(pl => (
+                    <PlaylistCard
+                      key={pl.id}
+                      playlist={pl}
+                      songs={songs}
+                      onDelete={handleDeletePlaylist}
+                      onRemoveSong={handleRemoveSong}
+                      onReorder={handleReorder}
+                    />
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+          <AudioPlayer currentSong={currentSong} onPlay={setCurrentSong} />
+          <NewPlaylistModal
+            isOpen={showNewPlaylist}
+            onClose={() => setShowNewPlaylist(false)}
+            onCreate={handleCreatePlaylist}
+          />
+        </div>
+      );
+    }
+
+    // =============== LOGIN ===============
+    function LoginPage({ onLogin }) {
+      const [email, setEmail] = React.useState('user@gmail.com');
+      const [password, setPassword] = React.useState('123456');
+      const [loading, setLoading] = React.useState(false);
+      const handleSubmit = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        try {
+          const res = await login({ email, password });
+          localStorage.setItem('token', res.token);
+          onLogin();
+        } catch (err) {
+          alert(err.message);
+        } finally {
+          setLoading(false);
+        }
+      };
+      return (
+        <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50">
+          <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-md">
+            <h2 className="text-2xl font-bold text-center mb-6">Login</h2>
+            <form onSubmit={handleSubmit}>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Email"
+                className="w-full p-3 mb-4 border rounded-lg"
+                required
+              />
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Password"
+                className="w-full p-3 mb-6 border rounded-lg"
+                required
+              />
+              <button
+                type="submit"
+                disabled={loading}
+                className={`w-full py-3 rounded-lg text-white font-semibold ${
+                  loading ? 'bg-gray-400' : 'bg-indigo-600 hover:bg-indigo-700'
+                }`}
+              >
+                {loading ? 'Loading...' : 'Login'}
+              </button>
+            </form>
+          </div>
+        </div>
+      );
+    }
+
+    // =============== APP ===============
+    function App() {
+      const [isLoggedIn, setIsLoggedIn] = React.useState(!!localStorage.getItem('token'));
+      const handleLogin = () => setIsLoggedIn(true);
+      const handleLogout = () => {
+        localStorage.removeItem('token');
+        setIsLoggedIn(false);
+      };
+      if (!isLoggedIn) return <LoginPage onLogin={handleLogin} />;
+      return <MainPage onLogout={handleLogout} />;
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
